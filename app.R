@@ -17,37 +17,68 @@ library(broom)
 library(stringr)
 
 ################################################## USER INTERFACE (UI) ###################################################
-ui <- fluidPage(
-  titlePanel("Deforestation in Colombia: evidence from high-resolution satellite imagery"),
-  sidebarLayout(
-    sidebarPanel(
-      h2("Intro"),
-      p("This proyect is an extension of the working paper Bonilla & Higuera (2016) which assesses 
-        the effects of protected areas in Colombia using high-resolution forest loss imagery for the period 2000-2012.
-        This demo will only use natural protected areas"),
-      br(),
-      br(),
-      br(),
-      br(),
-      "This proyect is under development. The authors are grateful of Colombia's Central Bank (Banco de la República)
-      support.",
-      br(),
-      br(),
-      HTML('<center><img src="banrep_logo.png" height="72" width="72"/></center>')
-       # img(src = "banrep_logo.png", height = 72, width = 72)
-    ),
-    mainPanel(
-      h3("Measuring the impact of protected areas: an RD approach"),
-      br(),
-      p("This Web aplication allows to assess the effect of legal protection on deforestation for individual parks in Colombia.
-        Please select the National or Regional Protected area."),
-      
-      selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME))),
-      h2("Natural protected areas in Colombia"),
-      leafletOutput("mymap")
-    )
-  )
+ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/bootstrap.css", inverse=TRUE,
+  tabPanel("Analisis",
+    tags$style(type="text/css", "html, body {width:100%;height:100%}"),
+    div(class="outer",
+        tags$head(includeCSS("www/style.css")),
+        leafletOutput("mymap", width="100%", height="100%"),
+        absolutePanel(top=20, left=60, height=20, width=600, h4("Paper parks? Deforestation in Colombia")),
+        absolutePanel(top=10, right=10,
+                      selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME)))
+                  )
+     )
+  ),
+  tabPanel("About",
+           p("This proyect is an extension of the working paper Bonilla & Higuera (2016) which assesses 
+         the effects of protected areas in Colombia using high-resolution forest loss imagery for the period 2000-2012.
+         This demo will only use natural protected areas"),
+                 br(),
+                 br(),
+                 br(),
+                 br(),
+                 "This proyect is under development. The authors are grateful of Colombia's Central Bank (Banco de la República)
+                 support.",
+                 br(),
+                 br(),
+                 HTML('<center><img src="banrep_logo.png" height="72" width="72"/></center>')
+                # img(src = "banrep_logo.png", height = 72, width = 72)
+           )
 )
+
+  
+  
+#   fluidPage(
+#   titlePanel("Deforestation in Colombia: evidence from high-resolution satellite imagery"),
+#   sidebarLayout(
+#     sidebarPanel(
+#       h2("Intro"),
+#       p("This proyect is an extension of the working paper Bonilla & Higuera (2016) which assesses 
+#         the effects of protected areas in Colombia using high-resolution forest loss imagery for the period 2000-2012.
+#         This demo will only use natural protected areas"),
+#       br(),
+#       br(),
+#       br(),
+#       br(),
+#       "This proyect is under development. The authors are grateful of Colombia's Central Bank (Banco de la República)
+#       support.",
+#       br(),
+#       br(),
+#       HTML('<center><img src="banrep_logo.png" height="72" width="72"/></center>')
+#        # img(src = "banrep_logo.png", height = 72, width = 72)
+#     ),
+#     mainPanel(
+#       h3("Measuring the impact of protected areas: an RD approach"),
+#       br(),
+#       p("This Web aplication allows to assess the effect of legal protection on deforestation for individual parks in Colombia.
+#         Please select the National or Regional Protected area."),
+#       
+#       selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME))),
+#       h2("Natural protected areas in Colombia"),
+#       leafletOutput("mymap")
+#     )
+#   )
+# )
   
 
 
@@ -84,6 +115,9 @@ server <- function(input, output, session){
     natural_parks[[1]][natural_parks[[1]]$NAME == input$park, ]
   })
   
+  ##################################################################################################################
+  ################################################### MAP IN LEAFLET ###############################################
+  ##################################################################################################################
 
   output$mymap <- renderLeaflet({ 
     leaflet() %>% addTiles() %>% addPolygons(data = natural_parks[[1]], popup = popup,
@@ -119,8 +153,13 @@ server <- function(input, output, session){
          proxy %>% clearPopups() %>% setView(lng = p2[1], lat = p2[2] , input$mymap_zoom) %>% addMarkers(lng = p2[1], lat = p2[2], layerId = "NAME")
        }
      })
+     
+     ############################################################################################################### 
+     ################################################# GRAPHS AND DATA #############################################
+     ###############################################################################################################
+     
 
-    
+   
 
 }
 
