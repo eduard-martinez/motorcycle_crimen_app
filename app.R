@@ -23,10 +23,15 @@ ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/b
     div(class="outer",
         tags$head(includeCSS("www/style.css")),
         leafletOutput("mymap", width="100%", height="100%"),
-        absolutePanel(top=20, left=60, height=20, width=600, h4("Paper parks? Deforestation in Colombia")),
-        absolutePanel(top=10, right=10,
-                      selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME)))
-                  )
+        absolutePanel(id = "controls", fixed = TRUE,
+                      draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
+                      width = 330, height = "auto",
+                      
+                      h2("Paper parks? Deforestation in Colombia"),
+                      h4("Select one protected area:"),
+                      selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME))),
+                      plotOutput("rdplot", width = 300, height = 300)
+                      )
      )
   ),
   tabPanel("About",
@@ -46,44 +51,10 @@ ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/b
            )
 )
 
-  
-  
-#   fluidPage(
-#   titlePanel("Deforestation in Colombia: evidence from high-resolution satellite imagery"),
-#   sidebarLayout(
-#     sidebarPanel(
-#       h2("Intro"),
-#       p("This proyect is an extension of the working paper Bonilla & Higuera (2016) which assesses 
-#         the effects of protected areas in Colombia using high-resolution forest loss imagery for the period 2000-2012.
-#         This demo will only use natural protected areas"),
-#       br(),
-#       br(),
-#       br(),
-#       br(),
-#       "This proyect is under development. The authors are grateful of Colombia's Central Bank (Banco de la República)
-#       support.",
-#       br(),
-#       br(),
-#       HTML('<center><img src="banrep_logo.png" height="72" width="72"/></center>')
-#        # img(src = "banrep_logo.png", height = 72, width = 72)
-#     ),
-#     mainPanel(
-#       h3("Measuring the impact of protected areas: an RD approach"),
-#       br(),
-#       p("This Web aplication allows to assess the effect of legal protection on deforestation for individual parks in Colombia.
-#         Please select the National or Regional Protected area."),
-#       
-#       selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME))),
-#       h2("Natural protected areas in Colombia"),
-#       leafletOutput("mymap")
-#     )
-#   )
-# )
-  
-
 
 ##################################################### SERVER (SERVER) ####################################################
 #Load data for Leaflet maps
+defo_dist <- readRDS("data/defo_dist.rds")
 natural_parks <- readRDS("data/natural_parks.rds")
 natural_parks[[1]]$TYPE <- ifelse(natural_parks[[1]]$DESIG %in% c("Distritos De Conservacion De Suelos",
               "Distritos Regionales De Manejo Integrado",
@@ -91,6 +62,7 @@ natural_parks[[1]]$TYPE <- ifelse(natural_parks[[1]]$DESIG %in% c("Distritos De 
               "Reservas Forestales Protectoras Regionales",
               " A\u0081reas De Recreacion",
               "Reserva Forestal Protectora Nacional"), "Regional", "National")
+
 
 
 # Create a pop-up:
@@ -158,10 +130,34 @@ server <- function(input, output, session){
      ################################################# GRAPHS AND DATA #############################################
      ###############################################################################################################
      
-
-   
-
-}
+     #Individual graphs for all territories (natural parks + territories)
+     #Data subset by input
+     data <- reactive({defo_dist %>% subset(defo_dist$buffer_name == input$park) %>%
+         mutate(., bin = cut(.$dist_disc, breaks = c(-50:50), include.lowest = T)) %>%
+         group_by(bin) %>%
+         summarize(meanbin = mean(loss_sum), sdbin = sd(loss_sum), n = length(ID)) %>%
+         .[complete.cases(.),] %>%
+         as.data.frame() %>%
+         mutate(treatment = ifelse(as.numeric(row.names(.)) > 50, 1, 0), bins = row.names(.)) %>%
+         mutate(bins = mapvalues(.$bins, from = c(1:100), to = c(-50:49)))
+     })
+     
+     output$rdplot <- renderPlot({
+       g <- ggplot(data(), aes(y = (meanbin), x = as.numeric(bins), colour = as.factor(treatment)))
+       g <- g + stat_smooth(method = "auto")
+       g <- g + geom_point(colour = "black", size = 1)
+       g <- g + labs(x = "Distance (km)", y = "Deforestation (Ha x km^2)")
+       # g <- g + scale_x_continuous(limits = c(-20, 20))
+       # g <- g + scale_y_continuous(limits = c(0, 0.3))
+       # # g <- g + ggtitle(str_c("Discontinuidad\n", "para", type, sep = " "))
+       g <- g + guides(colour = FALSE)
+       # g <- g + theme_bw()
+       g
+       # # ggsave(str_c("RDggplot_", type, "strategy2",".pdf"), width=30, height=20, units="cm")
+       # # }, x = l, type = c("Áreas protegidas nacionales","Áreas protegidas regionales","Resguardos indígenas", "Comunidades negras"))
+     })
+    
+ }
 
 shinyApp(ui = ui, server = server)
 
