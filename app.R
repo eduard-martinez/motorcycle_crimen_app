@@ -30,7 +30,8 @@ ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/b
                       h2("Paper parks? Deforestation in Colombia"),
                       h4("Select one protected area:"),
                       selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME))),
-                      plotOutput("rdplot", width = 300, height = 300)
+                      plotOutput("rdplot", width = 300, height = 300),
+                      textOutput("message")
                       )
      )
   ),
@@ -142,21 +143,29 @@ server <- function(input, output, session){
          mutate(bins = mapvalues(.$bins, from = c(1:100), to = c(-50:49)))
      })
      
-     output$rdplot <- renderPlot({
-       g <- ggplot(data(), aes(y = (meanbin), x = as.numeric(bins), colour = as.factor(treatment)))
-       g <- g + stat_smooth(method = "auto")
-       g <- g + geom_point(colour = "black", size = 1)
-       g <- g + labs(x = "Distance (km)", y = "Deforestation (Ha x km^2)")
-       # g <- g + scale_x_continuous(limits = c(-20, 20))
-       # g <- g + scale_y_continuous(limits = c(0, 0.3))
-       # # g <- g + ggtitle(str_c("Discontinuidad\n", "para", type, sep = " "))
-       g <- g + guides(colour = FALSE)
-       # g <- g + theme_bw()
-       g
-       # # ggsave(str_c("RDggplot_", type, "strategy2",".pdf"), width=30, height=20, units="cm")
-       # # }, x = l, type = c("Áreas protegidas nacionales","Áreas protegidas regionales","Resguardos indígenas", "Comunidades negras"))
+     observeEvent(input$park, {
+       if(dim(data())[1] == 0){
+         renderText({
+           "There are no effective controls or treatments "
+         })
+       } else {
+         output$rdplot <-
+           renderPlot({
+             g <- ggplot(data(), aes(y = (meanbin), x = as.numeric(bins), colour = as.factor(treatment)))
+             g <- g + stat_smooth(method = "auto")
+             g <- g + geom_point(colour = "black", size = 1)
+             g <- g + labs(x = "Distance (km)", y = "Deforestation (Ha x km^2)")
+             # g <- g + scale_x_continuous(limits = c(-20, 20))
+             # g <- g + scale_y_continuous(limits = c(0, 0.3))
+             # # g <- g + ggtitle(str_c("Discontinuidad\n", "para", type, sep = " "))
+             g <- g + guides(colour = FALSE)
+             # g <- g + theme_bw()
+             g
+             # # ggsave(str_c("RDggplot_", type, "strategy2",".pdf"), width=30, height=20, units="cm")
+             # # }, x = l, type = c("Áreas protegidas nacionales","Áreas protegidas regionales","Resguardos indígenas", "Comunidades negras"))
+           })
+       }
      })
-    
  }
 
 shinyApp(ui = ui, server = server)

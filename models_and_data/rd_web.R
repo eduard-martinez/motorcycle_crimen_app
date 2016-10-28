@@ -47,3 +47,9 @@ data_dist <- function(x){
 defo_dist <- data_dist(dist)
 
 
+
+
+
+
+
+
