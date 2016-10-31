@@ -29,9 +29,16 @@ ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/b
                       
                       h2("Paper parks? Deforestation in Colombia"),
                       h4("Select one protected area:"),
-                      selectInput(inputId = "park", label = "", choices = c(as.character(natural_parks[[1]]$NAME))),
-                      plotOutput("rdplot", width = 300, height = 300),
-                      textOutput("message")
+                      selectInput(inputId = "park", label = "", choices = c("", as.character(natural_parks[[1]]$NAME)), selected = ""),
+                      plotOutput("rdplot", width = 300, height = 300)
+                      ),
+        
+        conditionalPanel(condition = "input.park != NULL ", 
+                      # id = "estimates", fixed = T, 
+                      # draggable = T, top = 60, left = 20, right = "auto", bottom = "auto",
+                      # width = 330, height = "auto",
+                      h2("Estimate"),
+                      plotOutput("rd_estimate", width = 300, height = 300)
                       )
      )
   ),
@@ -67,9 +74,9 @@ natural_parks[[1]]$TYPE <- ifelse(natural_parks[[1]]$DESIG %in% c("Distritos De 
 
 
 # Create a pop-up:
-popup <- paste0("<b>Nombre: </b>", natural_parks[[1]]@data$NAME, 
-                "<b><br />Tipo: </b>", natural_parks[[1]]@data$DESIG, 
-                "<b><br />Año </b>: ", natural_parks[[1]]@data$STATUS_YR)
+popup <- paste0("<b>Name: </b>", natural_parks[[1]]@data$NAME, 
+                "<b><br />Type: </b>", natural_parks[[1]]@data$DESIG, 
+                "<b><br />Year </b>: ", natural_parks[[1]]@data$STATUS_YR)
 
 # popup_select <- paste0("<b>Nombre: </b>", natural_parks[[1]]@data$NAME[natural_parks[[1]]@data$NAME == input$park], 
 #                        "<b><br />Tipo: </b>", natural_parks[[1]]@data$DESIG[natural_parks[[1]]@data$DESIG == input$park], 
@@ -84,10 +91,7 @@ pal <- colorFactor(
 
 
 server <- function(input, output, session){
-  data <- reactive({
-    natural_parks[[1]][natural_parks[[1]]$NAME == input$park, ]
-  })
-  
+
   ##################################################################################################################
   ################################################### MAP IN LEAFLET ###############################################
   ##################################################################################################################
@@ -119,21 +123,34 @@ server <- function(input, output, session){
      })
      
      observeEvent(input$park, { # update the map view on location selectInput changes
+       if(input$park != ""){
        p <- input$mymap_shape_click
        p2 <- gCentroid(natural_parks[[1]][natural_parks[[1]]$NAME == input$park, ]) %>% coordinates()
        proxy <- leafletProxy("mymap")
        if(length(p$id) && input$park != p$id){
          proxy %>% clearPopups() %>% setView(lng = p2[1], lat = p2[2] , input$mymap_zoom) %>% addMarkers(lng = p2[1], lat = p2[2], layerId = "NAME")
        }
+       } else {
+           proxy <- leafletProxy("mymap")
+           proxy
+         }
      })
      
      ############################################################################################################### 
      ################################################# GRAPHS AND DATA #############################################
      ###############################################################################################################
      
+     ############################################################################################################### 
+     ####################################################### RD ####################################################
+     ###############################################################################################################
+     
      #Individual graphs for all territories (natural parks + territories)
      #Data subset by input
-     data <- reactive({defo_dist %>% subset(defo_dist$buffer_name == input$park) %>%
+     data <- reactive({
+       if(input$park == ""){
+         return(NULL)
+       } else {
+       defo_dist %>% subset(defo_dist$buffer_name == input$park) %>%
          mutate(., bin = cut(.$dist_disc, breaks = c(-50:50), include.lowest = T)) %>%
          group_by(bin) %>%
          summarize(meanbin = mean(loss_sum), sdbin = sd(loss_sum), n = length(ID)) %>%
@@ -141,16 +158,14 @@ server <- function(input, output, session){
          as.data.frame() %>%
          mutate(treatment = ifelse(as.numeric(row.names(.)) > 50, 1, 0), bins = row.names(.)) %>%
          mutate(bins = mapvalues(.$bins, from = c(1:100), to = c(-50:49)))
+       }
      })
      
-     observeEvent(input$park, {
-       if(dim(data())[1] == 0){
-         renderText({
-           "There are no effective controls or treatments "
-         })
-       } else {
          output$rdplot <-
            renderPlot({
+             if(input$park == ""){
+               return(NULL)
+             } else{
              g <- ggplot(data(), aes(y = (meanbin), x = as.numeric(bins), colour = as.factor(treatment)))
              g <- g + stat_smooth(method = "auto")
              g <- g + geom_point(colour = "black", size = 1)
@@ -163,9 +178,16 @@ server <- function(input, output, session){
              g
              # # ggsave(str_c("RDggplot_", type, "strategy2",".pdf"), width=30, height=20, units="cm")
              # # }, x = l, type = c("Áreas protegidas nacionales","Áreas protegidas regionales","Resguardos indígenas", "Comunidades negras"))
+             }
            })
-       }
-     })
+     
+     
+     ############################################################################################################### 
+     ################################################### RD ESTIMATE ###############################################
+     ###############################################################################################################
+     
+     
+     
  }
 
 shinyApp(ui = ui, server = server)
