@@ -26,20 +26,23 @@ ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/b
         absolutePanel(id = "controls", fixed = TRUE,
                       draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
                       width = 330, height = "auto",
-                      
                       h2("Paper parks? Deforestation in Colombia"),
                       h4("Select one protected area:"),
                       selectInput(inputId = "park", label = "", choices = c("", as.character(natural_parks[[1]]$NAME)), selected = ""),
                       plotOutput("rdplot", width = 300, height = 300)
                       ),
-        
-        conditionalPanel(condition = "input.park != NULL ", 
-                      # id = "estimates", fixed = T, 
-                      # draggable = T, top = 60, left = 20, right = "auto", bottom = "auto",
-                      # width = 330, height = "auto",
-                      h2("Estimate"),
-                      plotOutput("rd_estimate", width = 300, height = 300)
+
+        absolutePanel(id = "estimate", fixed = TRUE,
+                      draggable = TRUE, top = 100, left = 40, right = "auto", bottom = "auto",
+                      width = 280, height = "auto",
+                      conditionalPanel(
+                        condition = "input.park != '' ",
+                        h5("Regression discontinuity estimator", align = "center"),
+                        h6("(Annual average effects)", align = "center"),
+                        plotOutput("rdestimate", width = 260, height = 260),
+                        htmlOutput("avoided1")
                       )
+        )
      )
   ),
   tabPanel("About",
@@ -165,11 +168,11 @@ server <- function(input, output, session){
            renderPlot({
              if(input$park == ""){
                return(NULL)
-             } else{
+             } else {
              g <- ggplot(data(), aes(y = (meanbin), x = as.numeric(bins), colour = as.factor(treatment)))
              g <- g + stat_smooth(method = "auto")
              g <- g + geom_point(colour = "black", size = 1)
-             g <- g + labs(x = "Distance (km)", y = "Deforestation (Ha x km^2)")
+             g <- g + labs(x = "Distance (km)", y = expression(paste("Deforestation", " (ha/",km^{2}, ")")))
              # g <- g + scale_x_continuous(limits = c(-20, 20))
              # g <- g + scale_y_continuous(limits = c(0, 0.3))
              # # g <- g + ggtitle(str_c("Discontinuidad\n", "para", type, sep = " "))
@@ -186,9 +189,62 @@ server <- function(input, output, session){
      ################################################### RD ESTIMATE ###############################################
      ###############################################################################################################
      
-     
-     
+     data_2 <- reactive({
+       if(input$park == ""){
+         return(NULL)
+       } else {
+         all_rd_df %>% mutate(buffer_name = as.factor(buffer_name)) %>% 
+           subset(buffer_name == input$park) %>%
+           rbind(., rd_agg[c(2:3), ])
+       } 
+     })
+         
+         output$rdestimate <-
+           renderPlot({
+             if(input$park == ""){
+               return(NULL)
+             } else{
+               g2 <- ggplot(data_2(), aes(x = Type, y = LATE))
+               g2 <- g2 + ylab(expression(paste("Local Average Treatment Effect", " (", "ha/",km^{2}, ")")))
+               g2 <- g2 + geom_errorbar(width=.1, aes(ymin = ci_l, ymax = ci_u))
+               g2 <- g2 + geom_point(shape = 21, size = 3, fill = "white")
+               g2 <- g2 + geom_hline(aes(yintercept = 0))
+               g2
+             }
+           })
+         
+         
+         data_3 <- reactive({
+           if(input$park == ""){
+             return(NULL)
+           } else {
+             all_rd_df %>% mutate(buffer_name == as.factor(buffer_name)) %>%
+               subset(buffer_name == input$park) %>%
+               mutate(change = (LATE/defo_mean) * 100) %>%
+               mutate(valid = ifelse(p_value > 0.05, 0, 1)) %>%
+               mutate(avoided = LATE * N_r)
+           }
+         }) 
+         
+         output$avoided1 <-
+           renderUI({
+             if(input$park == ""){
+               return(NULL)
+             } else if(data_3()$valid == 1 & data_3()$LATE < 0){
+               HTML(paste0("<b>LATE: </b>", data_3()$LATE,
+                     "<b><br /> Avoided deforestation: </b>", round(data_3()$avoided, 3), " ha.",
+                     "<b><br /> Percent change: </b>", round(data_3()$change, 2), " %")) 
+             } else if (data_3()$valid == 1 & data_3()$LATE > 0){
+               HTML(paste0("<b>LATE: </b>", data_3()$LATE, 
+                     "<b><br /> Excess deforestation: </b>", round(data_3()$avoided, 3), " ha.",
+                     "<b><br /> Percent change: </b>", round(data_3()$change, 2), " %"))
+             } else if(data_3()$valid == 0){
+               HTML(paste0("<center>The selected park does not have a significant effect</center>"))
+             }
+           })
  }
+
+
 
 shinyApp(ui = ui, server = server)
 

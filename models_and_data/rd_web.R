@@ -150,7 +150,9 @@ rd_to_df <- function(list, dataframe){
     rename(buffer_name = .id, LATE = tabl3.str.Coef, se = tabl3.str.Std..Err., z = tabl3.str.z,
            p_value = tabl3.str.P..z., ci_l = tabl3.str.CI.Lower, ci_u = tabl3.str.CI.Upper) %>%
     mutate(buffer_name = names(dataframe)[sapply(dataframe, function(y) is.null(y) == FALSE)]) %>%
-    mutate(type = "Protected area")
+    mutate(Type = "Selected") %>%
+    mutate(ci_l_alt = LATE - 1.96 * se) %>%
+    mutate(c_u_alt = LATE - 1.96 * se)
 }
 
 #Get a data.frame for the valid results (remove from all_rd the NULL ones)
@@ -163,20 +165,24 @@ setwd("~/Dropbox/BANREP/Backup Data")
 rd_agg <- rd_to_df(readRDS("rd_robust_parks_2_ctrl_fx.rds")) %>% #reduced form of the function rd_to_df
   rename(LATE = tabl3.str.Coef, se = tabl3.str.Std..Err., z = tabl3.str.z,
                 p_value = tabl3.str.P..z., ci_l = tabl3.str.CI.Lower, ci_u = tabl3.str.CI.Upper) %>%
+  mutate_all(funs(as.character)) %>% mutate_all(funs(as.numeric)) %>%
   mutate(buffer_name = c("All", "National", "Regional")) %>%
-  mutate(type = c("All protected areas", "All National protected areas", "All regional protected areas")) %>%
-  mutate(defo_mean = c(NA, 0.219, 0.197))
+  mutate(Type = c("Protected areas", "National", "Regional")) %>%
+  mutate(defo_mean = c(NA, 0.219, 0.197))  %>%
+  mutate(ci_l_alt = LATE - 1.96 * se) %>%
+  mutate(c_u_alt = LATE - 1.96 * se)
 
-rd_agg <- rd_agg[ ,c(11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 12)]
+rd_agg <- rd_agg[ ,c(11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 12, 14, 15)]
 
 #Merge individual results with aggregated results
 all_rd_df <- rbind(all_rd_df, rd_agg)
 
 
 # Make the graph with the 95% confidence interval
-ggplot(all_rd_df[c(1, 123, 124), ], aes(x=type, y=LATE, group=1)) +
+ggplot(all_rd_df[c(20, 123, 124), ], aes(x= Type, y = LATE)) +
   geom_errorbar(width=.1, aes(ymin=ci_l, ymax=ci_u)) +
-  geom_point(shape=21, size=3, fill="white")
+  geom_point(shape=21, size=3, fill="white") 
+  
 
 
 
