@@ -15,7 +15,15 @@ library(foreign)
 library(stringr)
 library(pbapply)
 
-########################################## STRATEGY 2: EFFECTIVE BORDERS ###############################################
+
+
+##################################################################################################################
+########################################## STRATEGY 2: EFFECTIVE BORDERS #########################################
+##################################################################################################################
+
+##################################################################################################################
+################################################## 1. PREPARE DATA ###############################################
+##################################################################################################################
 
 #Import datasets (covariates)
 setwd("~/Dropbox/BANREP/Deforestacion/Datos/Dataframes")
@@ -51,7 +59,9 @@ defo_dist_controls <- data_dist(dist)
 defo_dist_controls_l <- data_dist(dist) %>%
   split(defo_dist_controls$buffer_name)
 
-#RD's with optimal bw's for all polygons (list) 
+##################################################################################################################
+################################################# 1. ESTIMATE RD'S ###############################################
+##################################################################################################################
 
 #All parks without controls
 rd_robust_list_nc <- pblapply(defo_dist_controls_l, failwith(NULL, function(park){
@@ -117,6 +127,11 @@ l <- stepwise_rd(list_rd = rd_robust_list, list_df = defo_dist_controls_l, list_
     x[valid]
   })
 
+
+##################################################################################################################
+########################################### 3. TRANSFORM DATA TO DF ##############################################
+##################################################################################################################
+
 #Append all valid elements in the list 
 l_all <- do.call("c", l)
 keys <- unique(c(names(l), names(rd_robust_list)))
@@ -127,7 +142,9 @@ all_rd <- setNames(mapply(c, rd_robust_list[keys], l_all[keys]), keys)
 #Filter the data.frames distance list (get valid data.frames)
 defo_dist_valid <- defo_dist_controls_l[names(all_rd)[sapply(all_rd, function(x) is.null(x) == FALSE)]]
 
-#RD list to data.frame
+##################################################################################################################
+############################################## RD TO DF FUNCTION #################################################
+##################################################################################################################
 rd_to_df <- function(list, dataframe){
   rd <- lapply(list, "[", "tabl3.str") %>%
     lapply(as.data.frame) %>%
@@ -155,6 +172,7 @@ rd_to_df <- function(list, dataframe){
     mutate(c_u_alt = LATE - 1.96 * se)
 }
 
+
 #Get a data.frame for the valid results (remove from all_rd the NULL ones)
 nulls <- names(all_rd)[sapply(all_rd, function(x) is.null(x) == TRUE)]
 all_rd_df <- rd_to_df(list = all_rd[sapply(all_rd, function(x) is.null(x) == FALSE)],
@@ -177,36 +195,109 @@ rd_agg <- rd_agg[ ,c(11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 12, 14, 15)]
 #Merge individual results with aggregated results
 all_rd_df <- rbind(all_rd_df, rd_agg)
 
+##################################################################################################################
+############################################ 4. PREPARE DATA FOR LEAFLET #########################################
+##################################################################################################################
 
-# Make the graph with the 95% confidence interval
-ggplot(all_rd_df[c(20, 123, 124), ], aes(x= Type, y = LATE)) +
-  geom_errorbar(width=.1, aes(ymin=ci_l, ymax=ci_u)) +
-  geom_point(shape=21, size=3, fill="white") 
-  
+#Open natural parks shapefile (2 SP object, 1. Projected in meters and 2. Mercator)
+setwd("~/Dropbox/BANREP/Deforestacion/Datos/UNEP")
+natural_parks <- readOGR(dsn = "WDPA_June2016_COL-shapefile", layer = "WDPA_June2016_COL-shapefile-polygons")
+natural_parks_proj <- spTransform(natural_parks, CRS=CRS("+init=epsg:3857")) #Projection in meters
+
+#For tracktability
+natural_parks <- list(natural_parks, natural_parks_proj)
+natural_parks[[2]]@data$ID <- c(1:dim(natural_parks[[2]]@data)[1])
+natural_parks[[1]]@data$ID <- c(1:dim(natural_parks[[1]]@data)[1])
+
+#Remove NP that are out of continental land and parks after 2012
+natural_parks <- natural_parks %>%
+  lapply(., function(x){
+    x[!(x@data$NAME %in% c("Malpelo Fauna and Flora Sanctuary", 
+                           "Old Providence Mc Bean Lagoon",
+                           "Malpelo",
+                           "Jhonny Cay Regional Park",
+                           "The Peak Regional Park",
+                           "Corales De Profundidad",
+                           "Los Corales Del Rosario Y De San Bernardo",
+                           "Gorgona",
+                           "Acandi Playon Y Playona",
+                           "Uramba Bahia Malaga")) & !x@data$STATUS_YR > 2000 & !x@data$GIS_AREA < 1 , ]
+    
+    
+  }) %>%
+  #Remove sections of park outside continental Colombia
+  mapply(function(x, y){
+    raster::intersect(y, x)
+  }, x = . , y = colombia_municipios)
 
 
-
-#Misc
-a <- names(l[[9]])[sapply(l[[9]], function(x) is.null(x) == TRUE)]
-a <- table(sapply(rd_robust_list_nc, function(x) is.null(x) == TRUE))
-
-
-count <- 2
-covs1 <- matrix(1:49, 7, 7)
-covs2 <- matrix(49, 7, 7)
-covs <- cbind(covs1, covs2)
+#Subset natural parks list for only valid results
+natural_parks <- natural_parks %>%
+  lapply(., function(x){
+    x$NAME <- as.character(x$NAME)
+    x[x$NAME %in% all_rd_df$buffer_name, ]
+  })
 
 
-while(count < 7){
-  covs <- covs[, -c(ncol(covs):ncol(covs) - count)]
-  count <- count + 1
-  print(dim(covs))
-  print(count)
-  print(covs)
-  }
+##################################################################################################################
+####################################### 5. CREATE NEW VARIABLES WITH DEFO DATA  ##################################
+##################################################################################################################
 
+#Deforestation by park
+# Table deforestation by park type
+setwd("~/Dropbox/BANREP/Deforestacion/Datos/HansenProcessed/")
+res <- brick("loss_year_brick_1km.tif")
 
+#Get defo by polygon
+defo_type <- raster::extract(res, natural_parks[[1]], fun = sum, na.rm = T, df = T)
 
+#Get area by pixel
+cells_natural <- cellFromPolygon(res, natural_parks[[1]]) %>%
+  sapply(length)
 
+defo_type_tot <- defo_type %>%
+  transmute(loss_sum = rowSums(defo_type[, c(4:length(names(defo_type)) - 1 )])) %>% 
+  mutate(defo_total = (loss_sum * 100) / 12) %>% 
+  mutate(area = gArea(natural_parks[[2]], byid = T) / 1e6) %>% 
+  mutate(area_pixel = cells_natural) %>% 
+  mutate(defo_total_area = defo_total / area) %>% 
+  mutate(defo_total_pixel = defo_total / area_pixel) %>%
+  mutate(id = row.names(.))
 
+natural_parks <- lapply(natural_parks, function(x){ 
+  mutate(x@data, id = c(1:length(x)))
+  x@data <- cbind(x@data, defo_type_tot)
+  return(x)
+})
 
+#Get a binary raster for deforestation for all the period
+setwd("~/Dropbox/BANREP/Deforestacion/Datos/HansenProcessed/")
+loss_agg <- stackApply(res[[c(2:13)]], 1, fun = sum,  filename = "loss_year_aggregated_1km.tif",
+                       format = "GTiff",
+                       options = "INTERLEAVE=BAND", 
+                       progress = "text", overwrite = T)
+
+rcl <- matrix(c(-Inf, 0.2, NA,
+                0.2, 0.4, 1,
+                0.4, 0.6, 2,
+                0.6, 0.8, 3,
+                0.8, 1, 4), ncol = 3, byrow = TRUE)
+
+loss_agg_rec <- reclassify(loss_agg, rcl, filename = "data/loss_year_reclassify_1km.tif",
+                           format = "GTiff",
+                           options = "INTERLEAVE=BAND", 
+                           progress = "text", overwrite = T) 
+
+loss_agg_proj <- loss_agg %>% 
+  projectRaster(., crs = CRS("+init=epsg:3857"),  filename = "loss_year_aggregated_1km.tif",
+                format = "GTiff",
+                options = "INTERLEAVE=BAND", 
+                progress = "text", overwrite = T )
+
+##################################################################################################################
+############################################ 6. PREPARE DATA FOR LEAFLET #########################################
+##################################################################################################################
+
+save(loss_agg_rec, natural_parks, defo_dist, all_rd_df, file = "data_app.RData")
+
+           

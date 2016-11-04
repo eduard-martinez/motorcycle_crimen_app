@@ -1,0 +1,7 @@
+load("/Users/Ivan/GitHub/deforestation_app/data_app.RData")
+ls()
+natural_parks
+natural_parks[[1]]$type
+library(rgeos)
+library(sp)
+natural_parks
