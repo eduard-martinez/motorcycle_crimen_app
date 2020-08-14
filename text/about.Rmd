@@ -1,0 +1,13 @@
+---
+output: html_fragment
+---
+
+### Autores
+- [Eduard F. Martínez-González](ef.martinezg@uniandes.edu.co). Doctorado en Economía de la Universidad de Los Andes; Investigador, Centro de Estudios sobre Seguridad y Drogas (CESED), Universidad de los Andes. [Comentarios](ef.martinezg@uniandes.edu.co).
+- [Michael Weintraub](mlw@uniandes.edu.co). Profesor Asociado, Escuela de Gobierno Alberto Lleras Camargo; Director del Área de Seguridad y Violencia, Centro de Estudios sobre Seguridad y Drogas (CESED), Universidad de los Andes.
+- [Leonardo Bonilla-Mejía](lbonilme@banrep.gov.co). Investigador, Grupo de Análisis del Mercado Laboral (GAMLA), Banco de la República.
+
+
+Puede acceder al repositorio de esta app [aquí](https://github.com/eduard-martinez/restriction-motorcycle-app).
+
+Puede acceder a la versión final en español de este documento [aquí](https://www.dropbox.com/sh/qoxwh5uglko7l9e/AADXSLS2ovbQFfiFNCQ3DEw4a?dl=0).

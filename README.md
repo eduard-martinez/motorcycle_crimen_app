@@ -1,3 +1,3 @@
-# deforestation_app
+# restriction-motorcycle-app
 
-Shiny app that visualize the causal impact of national protected areas over deforestation in Colombia. Codes for replication of the paper behind the methods in this app, are in the deforestation repository. 
+This repository contains the Shiny app code with the results of the paper "Motorcycle restrictions and its effects on crime in Colombia".

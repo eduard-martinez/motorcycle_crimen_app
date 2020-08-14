@@ -1,268 +1,223 @@
-################################################ SHINY WEB APP ###########################################################
-library(shiny)
-library(rsconnect)
-library(leaflet)
-library(plyr)
-library(dplyr)
-library(htmltools)
-library(raster)
-library(rgdal)
-library(magrittr)
-library(sp)
-library(ggplot2)
-library(rgeos)
-library(maptools)
-library(dplyr)
-library(broom)
-library(stringr)
-library(raster)
-################################################## USER INTERFACE (UI) ###################################################
-load("app_data.RData")
-r <- raster("loss_year_reclassify_1km.tif")
 
-ui <- navbarPage(title = "Deforestation",theme="http://bootswatch.com/spacelab/bootstrap.css", inverse=TRUE,
-  tabPanel("Map",
-           withMathJax(),
-    tags$style(type="text/css", "html, body {width:100%;height:100%}"),
-    div(class="outer",
-        tags$head(includeCSS("www/style.css"), tags$script(src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML-full", type = 'text/javascript'),
-                                                          tags$script( "MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$']]}});", type='text/x-mathjax-config')),
-        leafletOutput("mymap", width="100%", height="100%"),
-        absolutePanel(id = "controls", fixed = TRUE,
-                      draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
-                      width = 330, height = "auto",
-                      h2("Paper parks? Deforestation in Colombia"),
-                      h4("Select one protected area:"),
-                      selectInput(inputId = "park", label = "", choices = c("", as.character(natural_parks[[1]]$NAME)), selected = ""),
-                      plotOutput("rdplot", width = 300, height = 300)
-                      ),
-        absolutePanel(id = "estimate", fixed = TRUE,
-                      draggable = TRUE, top = 100, left = 40, right = "auto", bottom = "auto",
-                      width = 280, height = "auto",
-                      conditionalPanel(
-                        condition = "input.park != '' ",
-                        h5("Regression discontinuity estimator", align = "center"),
-                        h6("Annual average effects", align = "center"),
-                        plotOutput("rdestimate", width = 260, height = 260),
-                        htmlOutput("avoided1")
+# Load packages
+library('shiny')
+library('shinythemes')
+library('tidyverse')
+library('maptools')
+library("broom")
+library('leaflet')
+library('htmltools')
+library('rsconnect')
+library('rgdal')
+library('magrittr')
+library('sp')
+library('rgeos')
+library("ggpubr")
+
+# Load maps and data
+maps = readRDS("data/maps.rds")
+df_results = readRDS("data/df_results.rds")
+ 
+#-----------------------#
+# Define user interface #
+#-----------------------# 
+                              
+ui <- navbarPage(title = "Restricciones a motocicletas y sus efectos sobre el crimen en Colombia", id="nav", theme = "http://bootswatch.com/spacelab/bootstrap.css", inverse=TRUE,
+                 
+                 # Panel Results
+                 tabPanel("Resultados",withMathJax(),tags$style(type="text/css", "html, body {width:100%;height:100%}"),
+                          div(class="outer", tags$head(includeCSS("style/style.css"),includeScript("style/gomap.js")),
+                          #tags$script(src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML-full", type = 'text/javascript'),
+                          #tags$script("MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$']]}});", type='text/x-mathjax-config')),
+                         
+                          
+                          # Map
+                          leafletOutput("mymap", width="100%", height="100%"),
+                              
+                          # Coefplot
+                          absolutePanel(id = "coefplot", fixed = TRUE,
+                                        draggable = TRUE, top = 60, left = 50, right = "auto", bottom = "auto", width = 330, height = "auto", 
+                                        h3("Restricciones a motocicletas y sus efectos sobre el crimen en Colombia"),
+                                        selectInput(inputId = "zonerestric", label = "Seleccione una restricción:", choices = c("",as.character(maps[[2]]$city_restric)), selected = ""),
+                                        plotOutput("DD_plot", width = 280, height = 240),
+                                        htmlOutput("avoided_coef")
+                          ),
+
+                        
+                          # Event Study
+                          absolutePanel(id = "event", fixed = TRUE,draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",width = 330, height = "auto",
+                                        conditionalPanel(
+                                                        condition = "input.zonerestric != '' ",
+                                                        h4('Event Study', align = "center"),
+                                                        selectInput(inputId = "type_crime", label = "Seleccione un tipo de delito:", 
+                                                                    choices = c(unique(df_results[[1]]$type_crime)),
+                                                                    selected = "Totales"),
+                                                        plotOutput("eventstudy", width = 300, height = 250),
+                                                        htmlOutput("avoided_event")
+                                                        
+                                        )
+                          )
                       )
-        )
-     )
-  ),
-  tabPanel("Description",
-           # includeHTML("text/Untitled.html")
-           p("NULL")
-           ),
-  
-  tabPanel("About",
-           p("This proyect is an extension of the working paper Bonilla & Higuera (2016) which assesses 
-             the effects of protected areas in Colombia using high-resolution forest loss imagery for the period 2000-2012.
-             This demo will only use natural protected areas"),
-           br(),
-           br(),
-           br(),
-           br(),
-           "This proyect is under development. The authors are grateful of Colombia's Central Bank (Banco de la República)
-           support.",
-           br(),
-           br(),
-           HTML('<center><img src="banrep_logo.png" height="72" width="72"/></center>')
-           # img(src = "banrep_logo.png", height = 72, width = 72)
-           )
+                 ),
+                 
+                 
+                 # Panel Description
+                 tabPanel("Estrategia Empírica",
+                          # Solucion al problema de insertar html https://stackoverflow.com/questions/25882276/does-shiny-ui-r-support-including-html-pages-on-each-tabpanel-with-in-tabsetpane 
+                          includeHTML("text/description.html")
+                 ),
+                 
+                 
+                 # Panel About
+                 tabPanel("Acerca de este proyecto",
+                          # Solucion al problema de insertar html https://stackoverflow.com/questions/25882276/does-shiny-ui-r-support-including-html-pages-on-each-tabpanel-with-in-tabsetpane 
+                          includeHTML("text/about.html")
+                 )
 )
 
 
-##################################################### SERVER (SERVER) ####################################################
-#Load data for Leaflet maps
-# r <- raster("data/loss_year_reclassify_1km.tif")
-# defo_dist <- readRDS("data/defo_dist.rds")
-# natural_parks <- readRDS("data/natural_parks.rds")
-natural_parks[[1]]$TYPE <- ifelse(natural_parks[[1]]$DESIG %in% c("Distritos De Conservacion De Suelos",
-              "Distritos Regionales De Manejo Integrado",
-              "Parque Natural Regional",
-              "Reservas Forestales Protectoras Regionales",
-              " A\u0081reas De Recreacion",
-              "Reserva Forestal Protectora Nacional"), "Regional", "National")
 
 
 
 # Create a pop-up:
-popup <- paste0("<center><b>", natural_parks[[1]]@data$NAME, "</b></center>",
-                "<center><i>Type: ", natural_parks[[1]]@data$DESIG, "</i></center>",
-                "<b><br />Creation year: </b> ", natural_parks[[1]]@data$STATUS_YR,
-                "<b><br />Annual deforestation: </b>", round(natural_parks[[1]]@data$defo_total, 3), " ha.",
-                "<b><br />Annual deforestation rate: </b>", round(natural_parks[[1]]@data$defo_total_pixel, 3), " ha/km$^2$")
+popup <- paste0("<center><b>", maps[[2]]@data$name_restric, "</b></center>",
+                "<b><br />Vigencia: </b> ", maps[[2]]@data$date_restric,
+                "<b><br />Densidad del delito: </b>", maps[[2]]@data$area_restric, " % de los delitos totales en la ciudad.",
+                "<b><br />Delitos en motocicleta / Delitos totales: </b>", maps[[2]]@data$area_restric, " %.",
+                "<b><br />Extención: </b>", maps[[2]]@data$percent_restric, " % del área total de la ciudad.")
+
+pal <- colorFactor( palette = c("#31a354", "#e5f5f9","pink2"), domain = maps[[2]]$name_restric)
 
 
-pal_raster <- colorFactor(palette =  c("#ffffb2", "#fecc5c", "#fd8d3c", "#e31a1c"), 
-                          domain = c(1:4),
-                          na.color = "#00000000"
-                          )
+#---------------#
+# Define server #
+#---------------#
+server <- function(input, output,session) {
 
-
-pal <- colorFactor(
-  palette = c("#31a354", "#e5f5f9"),
-  domain = natural_parks[[1]]$TYPE
-)
-
-
-server <- function(input, output, session){
-  
-  ##################################################################################################################
-  ################################################### MAP IN LEAFLET ###############################################
-  ##################################################################################################################
-
-  output$mymap <- renderLeaflet({ 
-    leaflet() %>% addTiles() %>% addPolygons(data = natural_parks[[1]], popup = popup,
-                                             layerId = as.character(natural_parks[[1]]$NAME),
-                                             color = pal(natural_parks[[1]]$TYPE), weight = 2,
-                                             opacity = 0.8) %>%
-      addProviderTiles("CartoDB.Positron") %>% addRasterImage(r, colors = pal_raster, opacity = 0.8, project = FALSE) %>% 
-      addLegend(position="bottomleft", pal = pal, values = natural_parks[[1]]$TYPE, labels=c("National", "Regional"), title = "Protected area jusrisdiction") %>%
-      addLegend(position="bottomleft", colors =  c("#ffffb2", "#fecc5c", "#fd8d3c", "#e31a1c"), values = c(1, 2, 3, 4), 
-                labels = c("20-40", "40-60", "60-80", "80-100"), title = paste0("Loss cover", "(ha/km", tags$sup(2), ")"))
-  })
-  
-
-
-     observeEvent(input$mymap_shape_click, { # update the location selectInput on map clicks
-       p <- input$mymap_shape_click
-       if(!is.null(p$id)){
-         if(is.null(input$park) || input$park != p$id) updateSelectInput(session, "park", selected = p$id)
-       }
-     })
-     
-     observeEvent(input$mymap_shape_click, { # update the map view on map clicks
-       p <- input$mymap_shape_click
-       proxy <- leafletProxy("mymap")
-       if(is.null(p$id)){
-         proxy
-       } else {
-         proxy %>% setView(lng=p$lng, lat=p$lat, input$mymap_zoom) %>% removeMarker(layerId="NAME")
-       }
-     })
-     
-     observeEvent(input$park, { # update the map view on location selectInput changes
-       if(input$park != ""){
-       p <- input$mymap_shape_click
-       p2 <- gCentroid(natural_parks[[1]][natural_parks[[1]]$NAME == input$park, ]) %>% coordinates()
-       proxy <- leafletProxy("mymap")
-       if(length(p$id) && input$park != p$id){
-         proxy %>% clearPopups() %>% setView(lng = p2[1], lat = p2[2] , input$mymap_zoom) %>% addMarkers(lng = p2[1], lat = p2[2], layerId = "NAME")
-       }
-       } else {
-           proxy <- leafletProxy("mymap")
-           proxy
-         }
-     })
-     
-     ############################################################################################################### 
-     ################################################# GRAPHS AND DATA #############################################
-     ###############################################################################################################
-     
-     ############################################################################################################### 
-     ####################################################### RD ####################################################
-     ###############################################################################################################
-     
-     #Individual graphs for all territories (natural parks + territories)
-     #Data subset by input
-     data <- reactive({
-       if(input$park == ""){
-         return(NULL)
-       } else {
-       defo_dist %>% subset(defo_dist$buffer_name == input$park) %>%
-         mutate(., bin = cut(.$dist_disc, breaks = c(-50:50), include.lowest = T)) %>%
-         group_by(bin) %>%
-         summarize(meanbin = mean(loss_sum), sdbin = sd(loss_sum), n = length(ID)) %>%
-         .[complete.cases(.),] %>%
-         as.data.frame() %>%
-         mutate(treatment = ifelse(as.numeric(row.names(.)) > 50, 1, 0), bins = row.names(.)) %>%
-         mutate(bins = mapvalues(.$bins, from = c(1:100), to = c(-50:49)))
-       }
-     })
-     
-         output$rdplot <-
-           renderPlot({
-             if(input$park == ""){
-               return(NULL)
-             } else {
-             g <- ggplot(data(), aes(y = (meanbin), x = as.numeric(bins), colour = as.factor(treatment)))
-             g <- g + stat_smooth(method = "auto")
-             g <- g + geom_point(colour = "black", size = 1)
-             g <- g + labs(x = "Distance (km)", y = expression(paste("Deforestation", " (ha/",km^{2}, ")")))
-             # g <- g + scale_x_continuous(limits = c(-20, 20))
-             # g <- g + scale_y_continuous(limits = c(0, 0.3))
-             # # g <- g + ggtitle(str_c("Discontinuidad\n", "para", type, sep = " "))
-             g <- g + guides(colour = FALSE)
-             # g <- g + theme_bw()
-             g
-             # # ggsave(str_c("RDggplot_", type, "strategy2",".pdf"), width=30, height=20, units="cm")
-             # # }, x = l, type = c("Áreas protegidas nacionales","Áreas protegidas regionales","Resguardos indígenas", "Comunidades negras"))
-             }
+          ### Create the map
+          output$mymap <- renderLeaflet({  
+          leaflet() %>% addTiles() %>% addPolygons(data = maps[[1]] , color='black' , weight = 2 , fillColor=NA, fillOpacity = 0.01) %>% 
+          addPolygons(data = maps[[2]], popup = popup, layerId = as.character(maps[[2]]$city_restric), color = "red", fill = "red", weight = 2, opacity = 0.5) %>% 
+          addProviderTiles("CartoDB.Positron") #%>% 
+          #addLegend(position="bottomleft", pal = pal, values = maps[[2]]$name_restric, labels=c(unique(maps[[2]]$name_restric)), title = "Zone") 
+          })
+          observeEvent(input$mymap_shape_click, { # update the location selectInput on map clicks
+          p <- input$mymap_shape_click
+          if(!is.null(p$id)){if(is.null(input$zonerestric) || input$zonerestric != p$id) updateSelectInput(session, "zonerestric", selected = p$id)
+          }
+          })
+          observeEvent(input$mymap_shape_click, { # update the map view on map clicks
+                       p <- input$mymap_shape_click
+                       proxy <- leafletProxy("mymap")
+                       if(is.null(p$id)){proxy} 
+                       else {proxy %>% setView(lng=p$lng, lat=p$lat, input$mymap_zoom) %>% removeMarker(layerId="city_restric")}
+          })
+          observeEvent(input$zonerestric, { # update the map view on location selectInput changes
+                       if(input$zonerestric != ""){
+                       p <- input$mymap_shape_click
+                       p2 <- gCentroid(maps[[2]][maps[[2]]$city_restric == input$zonerestric, ]) %>% coordinates()
+                       proxy <- leafletProxy("mymap")
+                       if(length(p$id) && input$zonerestric != p$id){
+                          proxy %>% clearPopups() %>% setView(lng = p2[1], lat = p2[2] , input$mymap_zoom) %>% addMarkers(lng = p2[1], lat = p2[2], layerId = "city_restric")
+                       }
+                       } 
+                       else {proxy <- leafletProxy("mymap")
+                             proxy
+                       }
+          })
+   
+          
+          ### Coefplot
+          data_1 <- reactive({
+                    if(input$zonerestric == ""){ return(NULL)} 
+                    else {df_results[[1]] %>% subset(city_restric == input$zonerestric) %>%
+                          subset(type_crime == "Total crimes")
+                    }
+          })
+          data_2 <- reactive({
+                    if(input$zonerestric == ""){ return(NULL)} 
+                    else {df_results[[1]] %>% subset(city_restric == input$zonerestric) %>%
+                          subset(type_crime == input$type_crime)
+                    }
+          })
+          output$DD_plot <- renderPlot({
+                            if(input$zonerestric == ""){return(NULL)} 
+                            else {g2 <- ggplot(data_2(), aes(y = coef, x = zone, color=zone,fill = zone)) + 
+                                        scale_color_manual(values=c("darkblue","brown4")) + scale_fill_manual(values=c("darkblue","brown4")) +
+                                        geom_errorbar(width=.1, aes(ymin = ci_lower, ymax = ci_upper),show.legend = F) + 
+                                        geom_point(shape = 21, size = 3,show.legend = F) + 
+                                        geom_hline(aes(yintercept = 0),linetype="solid",colour = "black") +
+                                        theme_bw()  +  theme(plot.title = element_text(hjust = 0.5,size = 16)) + xlab("Zona") + ylab("Coeficiente") + 
+                                        ggtitle(as.character(input$type_crime)) 
+                                  g2
+                           }
+          })
+          
+          
+          ### Event Study
+          data_3 <- reactive({
+                    if(input$zonerestric == ""){  return(NULL)} 
+                    else { df_results[[2]] %>% subset(city_restric == input$zonerestric) %>%
+                           subset(type_crime == input$type_crime)
+                    } 
+          })
+          output$eventstudy <- renderPlot({
+                               if(input$zonerestric == ""){ return(NULL) } 
+                               else{ g3 <- ggplot(data_3(), aes(x = months, y = coef, color = zone,fill = zone)) + labs(" ") +
+                                           scale_color_manual(values=c("darkblue","brown4")) + scale_fill_manual(values=c("darkblue","brown4")) +
+                                           geom_errorbar(width=.1, aes(ymin = ci_lower, ymax = ci_upper)) + scale_x_discrete(limits=c(-6:5)) +
+                                           geom_point(shape = 21, size = 3) + ylab("Coeficiente") + xlab("Meses al inicio de la restricción") +
+                                           geom_hline(aes(yintercept = 0)) + geom_vline(aes(xintercept = -1),linetype="dashed",colour = "black") +
+                                           theme_bw() + theme(plot.title = element_text(hjust = 0.5,size = 20),
+                                                              legend.title = element_blank(),legend.position="bottom",
+                                                              legend.direction = "horizontal",legend.text = element_text(hjust = 0.5,size = 10) )
+                                    g3
+                               }
            })
-     
-     
-     ############################################################################################################### 
-     ################################################### RD ESTIMATE ###############################################
-     ###############################################################################################################
-     
-     data_2 <- reactive({
-       if(input$park == ""){
-         return(NULL)
-       } else {
-         all_rd_df %>% mutate(buffer_name = as.factor(buffer_name)) %>% 
-           subset(buffer_name == input$park) %>%
-           rbind(., rd_agg[c(2:3), ])
-       } 
-     })
-         
-         output$rdestimate <-
-           renderPlot({
-             if(input$park == ""){
-               return(NULL)
-             } else{
-               g2 <- ggplot(data_2(), aes(x = Type, y = LATE))
-               g2 <- g2 + ylab(expression(paste("Local Average Treatment Effect", " (", "ha/",km^{2}, ")")))
-               g2 <- g2 + geom_errorbar(width=.1, aes(ymin = ci_l, ymax = ci_u))
-               g2 <- g2 + geom_point(shape = 21, size = 3, fill = "white")
-               g2 <- g2 + geom_hline(aes(yintercept = 0))
-               g2
-             }
-           })
-         
-         
-         data_3 <- reactive({
-           if(input$park == ""){
-             return(NULL)
-           } else {
-             all_rd_df %>% mutate(buffer_name == as.factor(buffer_name)) %>%
-               subset(buffer_name == input$park) %>%
-               mutate(change = (LATE/defo_mean) * 100) %>%
-               mutate(valid = ifelse(p_value > 0.05, 0, 1)) %>%
-               mutate(avoided = LATE * N_r)
+        
+          
+           ### avoided_coef     
+           treated <- reactive({if(input$zonerestric == ""){return(NULL)}else {subset(data_2(),zone=="Treated") %>% .[1,2] %>% as.numeric()}})
+           spillover <- reactive({if(input$zonerestric == ""){return(NULL)}else {subset(data_2(),zone=="Spillover") %>% .[1,2] %>% as.numeric()}})
+           output$avoided_coef <- renderUI({if(input$zonerestric == ""){ return(NULL)} else {
+           if(treated() < 0.05 & spillover() < 0.05){
+              withMathJax(HTML(paste0("<p>","En este grafico se muestra el efecto promedio de la restricción sobre los delitos (",
+                                      tolower(input$type_crime),") en la zona tratada y la zona de spillover.","</p>"), 
+                               paste0("<p>","Los resultados sugieren que durante los 6 primeros meses de la restricción, se redujeron (",as.character(round(as.numeric(subset(data_2(),zone=="Treated")$coef),5)),
+                                      ") los delitos (",tolower(input$type_crime),") en la zona de tratamiento. Sin embargo, el efecto es compensado por un incremento de igual magnitud (",as.character(round(as.numeric(subset(data_2(),zone=="Spillover")$coef),5)),
+                                      ") en la zona de spillover.","</p>"))) 
            }
-         }) 
-         
-         output$avoided1 <-
-           renderUI({
-             if(input$park == ""){
-               return(NULL)
-             } else if(data_3()$valid == 1 & data_3()$LATE < 0){
-              withMathJax(HTML(paste0("<b>LATE: </b>", data_3()$LATE, " ha/km$^2$",
-                     "<b><br /> Avoided deforestation: </b>", round(data_3()$avoided, 3), " ha.",
-                     "<b><br /> Percent change: </b>", round(data_3()$change, 2), " %")))
-             } else if (data_3()$valid == 1 & data_3()$LATE > 0){
-              withMathJax(HTML(paste0("<b>LATE: </b>", data_3()$LATE, " ha/km$^2$",
-                     "<b><br /> Excess deforestation: </b>", round(data_3()$avoided, 3), " ha.",
-                     "<b><br /> Percent change: </b>", round(data_3()$change, 2), "%")))
-             } else if(data_3()$valid == 0){
-               withMathJax(HTML(paste0("<center>The selected park does not have a significant effect</center>")))
-             }
+           else if(treated() < 0.05 & spillover() >= 0.05){
+             withMathJax(HTML(paste0("<p>","En este grafico se muestra el efecto promedio de la restricción sobre los delitos (",
+                                     tolower(input$type_crime),") en la zona tratada y la zona de spillover.","</p>"), 
+                              paste0("<p>","Los resultados sugieren que durante los 6 primeros meses de la restricción, se redujeron (",as.character(round(as.numeric(subset(data_2(),zone=="Treated")$coef),5)),
+                                     ") los delitos (",tolower(input$type_crime),") en la zona de tratamiento. Mientras que para la zona de spillover no se observan cambios estadísticamente significativos.","</p>"))) 
+           }
+           else if(treated() >= 0.05 & spillover() < 0.05){
+             withMathJax(HTML(paste0("<p>","En este grafico se muestra el efecto promedio de la restricción sobre los delitos (",
+                                     tolower(input$type_crime),") en la zona tratada y la zona de spillover.","</p>"), 
+                              paste0("<p>","Los resultados sugieren que durante los 6 primeros meses de la restricción, se incrementaron (",as.character(round(as.numeric(subset(data_2(),zone=="Spillover")$coef),5)),
+                                     ") los delitos (",tolower(input$type_crime),") en la zona de spillover. Mientras que para la zona de tratamiento no se observan cambios estadísticamente significativos.","</p>"))) 
+           }
+           else if (treated() >= 0.05 & spillover() >= 0.05){
+             withMathJax(HTML(paste0("<p>","En este grafico se muestra el efecto promedio de la restricción sobre los delitos (",
+                                     tolower(input$type_crime),") en la zona tratada y la zona de spillover.","</p>"), 
+                              paste0("<p>","Los resultados sugieren que durante los 6 primeros meses de la restricción, la medida no tuvo efectos estadísticamente significativos sobre 
+                                     delitos (",tolower(input$type_crime),") ni en la zona de tratamiento ni en la zona de spillover.","</p>"))) 
+           }
+           }})
+          
+           
+           ### avoided_event
+           output$avoided_event <- renderUI({if(input$zonerestric == ""){ return(NULL)} 
+                                            else {withMathJax(HTML(paste0("Esta grafica muestra la dinámica temporal del efecto de la restricción sobre los los delitos (",
+                                                                          tolower(input$type_crime),") para una ventana de 6 meses alrededor de la fecha implementación.")))
+                                            }
            })
- }
 
+}
 
-
+#---------------------#
+# Run the application #
+#---------------------#
 shinyApp(ui = ui, server = server)
-
-
